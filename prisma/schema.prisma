@@ -1,0 +1,156 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// User accounts
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  username     String   @unique
+  avatar       String?  // optional avatar URL or emoji
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  userProgress UserProgress[]
+  quizResults  QuizResult[]
+  points       Point[]
+
+  @@map("users")
+}
+
+// Available lessons
+model Lesson {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  level       Int        // 1-4 difficulty levels
+  type        String     // "sequential", "branching", "repetition", "combined"
+  contentUrl  String?    @map("content_url") // for video/audio files
+  pointsValue Int        @default(10) @map("points_value")
+  order       Int        // sequence order within level
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  userProgress UserProgress[]
+  quizResults  QuizResult[]
+  quizQuestions QuizQuestion[]
+  exercises Exercise[]
+
+  @@map("lessons")
+}
+
+// User progress tracking for lessons
+model UserProgress {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  lessonId   String    @map("lesson_id")
+  completed  Boolean   @default(false)
+  completedAt DateTime? @map("completed_at")
+  timeSpent  Int       @default(0) @map("time_spent") // in seconds
+  score      Int?      // percentage score
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@map("user_progress")
+}
+
+// Quiz questions
+model QuizQuestion {
+  id          String   @id @default(cuid())
+  lessonId    String   @map("lesson_id")
+  question    String
+  type        String   // "multiple_choice", "interactive", "pattern", "simulation", "real_world"
+  options     String?  // JSON array of options for multiple choice
+  correctAnswer String  @map("correct_answer") // correct answer or JSON data
+  explanation String?  // explanation for the answer
+  order       Int      // order within lesson
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("quiz_questions")
+}
+
+// Quiz results from users
+model QuizResult {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  lessonId    String   @map("lesson_id")
+  score       Int      // percentage score
+  answersJson String   @map("answers_json") // JSON object with answers
+  timeSpent   Int      @map("time_spent") // in seconds
+  completedAt DateTime @default(now()) @map("completed_at")
+
+  // Relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("quiz_results")
+}
+
+// Points earned by users
+model Point {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  pointsEarned Int      @map("points_earned")
+  activityType String   @map("activity_type") // "video", "audio", "reading", "exercise", "quiz", "streak"
+  description  String?  // description of the activity
+  timestamp    DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("points")
+}
+
+// Exercise types and user exercise attempts
+model Exercise {
+  id          String   @id @default(cuid())
+  lessonId    String   @map("lesson_id")
+  title       String
+  type        String   // "drag_drop", "flowchart", "pattern", "story", "code_blocks"
+  content     String   // JSON content for exercise configuration
+  solution    String   // JSON solution or correct answer
+  pointsValue Int      @default(15) @map("points_value")
+  order       Int      // order within lesson
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  lesson      Lesson          @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  attempts    ExerciseAttempt[]
+
+  @@map("exercises")
+}
+
+// User exercise attempts
+model ExerciseAttempt {
+  id         String   @id @default(cuid())
+  exerciseId String   @map("exercise_id")
+  userId     String   @map("user_id")
+  answer     String   // JSON answer from user
+  correct    Boolean  @default(false)
+  attempts   Int      @default(1) // number of attempts
+  points     Int      @default(0)
+  completedAt DateTime @default(now()) @map("completed_at")
+
+  // Relations
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@map("exercise_attempts")
+}
