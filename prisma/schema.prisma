@@ -43,6 +43,8 @@ model Lesson {
   // Relations
   userProgress UserProgress[]
   quizResults  QuizResult[]
+  quizQuestions QuizQuestion[]
+  exercises Exercise[]
 
   @@map("lessons")
 }
