@@ -107,7 +107,7 @@ export async function authenticateUser(credentials: LoginCredentials): Promise<{
     id: user.id,
     email: user.email,
     username: user.username,
-    avatar: user.avatar,
+    avatar: user.avatar || undefined,
   }
 
   return { user: authUser, token }
