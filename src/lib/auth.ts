@@ -80,7 +80,7 @@ export async function createUser(credentials: SignupCredentials): Promise<AuthUs
     id: user.id,
     email: user.email,
     username: user.username,
-    avatar: user.avatar,
+    avatar: user.avatar || undefined,
   }
 }
 
@@ -126,7 +126,7 @@ export async function getUserById(userId: string): Promise<AuthUser | null> {
     id: user.id,
     email: user.email,
     username: user.username,
-    avatar: user.avatar,
+    avatar: user.avatar || undefined,
   }
 }
 
@@ -140,6 +140,6 @@ export async function updateUserAvatar(userId: string, avatar: string): Promise<
     id: user.id,
     email: user.email,
     username: user.username,
-    avatar: user.avatar,
+    avatar: user.avatar || undefined,
   }
 }
