@@ -1,7 +1,7 @@
 # Logithm - Sistem Simulasi Percabangan & Pengulangan
 
-![Logithm Banner](https://via.placeholder.com/1000x300?text=Logithm+App+Banner) 
-*(Ganti link di atas dengan link gambar banner aplikasi Anda jika ada)*
+ <img src="screenshot/banner.jpg" width="200">
+
 
 **Logithm** adalah aplikasi pembelajaran berbasis Android yang dirancang untuk membantu mahasiswa Teknik Informatika memahami konsep dasar algoritma, khususnya **Percabangan (Branching)** dan **Pengulangan (Looping)**.
 
@@ -26,26 +26,11 @@ Aplikasi ini sedang dalam proses peninjauan di Google Play Store. Namun, Anda da
 ## 📸 Screenshots
 | Halaman Utama | Simulasi | Kuis |
 |:---:|:---:|:---:|
-| <img src="link_gambar_1" width="200"> | <img src="link_gambar_2" width="200"> | <img src="link_gambar_3" width="200"> |
+| ## 📸 Screenshots
+| Halaman Utama | Simulasi | Kuis |
+|:---:|:---:|:---:|
+| <img src="screenshot/home.jpg" width="200"> | <img src="screenshot/simulasi.jpg" width="200"> | <img src="screenshot/kuis.jpg" width="200"> |
 
-*(Upload screenshot aplikasi ke folder 'docs' atau 'screenshots' di repo, lalu ganti 'link_gambar' dengan path-nya)*
 
 ## 👤 Author
 **Luthfi Fuad Radityawan** Mahasiswa D3 Teknik Informatika - Politeknik Kampar
-
-# logithm
-
-A new Flutter project.
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
