@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "230874727303",
+    "project_id": "logithm-bf44c",
+    "storage_bucket": "logithm-bf44c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:230874727303:android:b8d83e63d5c420b2450922",
+        "android_client_info": {
+          "package_name": "com.logithm.projects"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCCc7RnY2nOzGEQHMQM2qLZ1uUD0cjm6HM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

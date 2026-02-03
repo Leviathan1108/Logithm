@@ -3,6 +3,9 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    
+    // [PENTING] Tambahkan Plugin Google Services di sini
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -11,24 +14,21 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        // Ubah ke VERSION_1_8 agar kompatibel dengan desugaring
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
 
-        // PERBAIKAN 1: Sintaks Kotlin DSL menggunakan 'is...' dan '='
+        // Mengaktifkan Desugaring (Agar fitur Java 8+ jalan di Android lama)
         isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        // Samakan dengan Java Version di atas
         jvmTarget = JavaVersion.VERSION_1_8.toString()
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // Pastikan Application ID ini SAMA PERSIS dengan yang didaftarkan di Firebase
         applicationId = "com.logithm.projects"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -37,8 +37,6 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -49,6 +47,9 @@ flutter {
 }
 
 dependencies {
-    // PERBAIKAN 2: Sintaks Kotlin DSL menggunakan kurung () dan kutip dua ""
+    // Library untuk Desugaring
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:1.2.2")
+    
+    // Note: Dependency Firebase (BOM) tidak perlu ditulis manual di sini 
+    // karena Flutter (pubspec.yaml) sudah mengurusnya secara otomatis.
 }
