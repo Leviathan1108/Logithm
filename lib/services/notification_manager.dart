@@ -15,7 +15,7 @@ class NotificationManager {
   Future<void> init() async {
     // 1. Setup Android
     const AndroidInitializationSettings androidSettings = 
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@mipmap/launcher_icon'); 
 
     // 2. Setup iOS
     const DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
@@ -29,7 +29,7 @@ class NotificationManager {
       iOS: iosSettings,
     );
 
-    // 3. Initialize (VERSI STABIL 17.x)
+    // 3. Initialize Plugin
     await _localNotifications.initialize(
       settings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
@@ -37,37 +37,63 @@ class NotificationManager {
       },
     );
 
-    // 4. Request Permission (Android 13+)
+    // [BARU] 4. BUAT CHANNEL SECARA EKSPLISIT (PENTING UNTUK ANDROID 8+)
+    // Agar notifikasi background bisa masuk ke channel yang benar
     if (Platform.isAndroid) {
       final androidImplementation = _localNotifications.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
       
       if (androidImplementation != null) {
+        // Request Permission
         await androidImplementation.requestNotificationsPermission();
+
+        // Create Channel
+        const AndroidNotificationChannel channel = AndroidNotificationChannel(
+          'channel_logithm_main', // ID harus SAMA dengan di AndroidManifest
+          'Logithm Notifications', // Nama yang muncul di setting HP
+          description: 'Pemberitahuan aplikasi Logithm',
+          importance: Importance.max,
+          playSound: true,
+          enableVibration: true,
+        );
+        
+        await androidImplementation.createNotificationChannel(channel);
       }
     }
 
+    // 5. Mulai dengarkan update dari database
     _listenToSupabase();
   }
 
+  // --- [PENTING] FUNGSI PUBLIK UNTUK DIPANGGIL DARI MAIN.DART ---
+  // Fungsi ini dipanggil oleh FirebaseMessaging.onMessage di main.dart
+  Future<void> showManualNotification({
+    required String title, 
+    required String body, 
+    String? payload
+  }) async {
+    await _showAndroidNotification(title: title, body: body, payload: payload);
+  }
+
+  // --- LISTENER DATABASE (SUPABASE REALTIME) ---
   void _listenToSupabase() {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
 
     Supabase.instance.client
-        .channel('public:notifications')
+        .channel('public:notifications:$userId') 
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'notifications',
           filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'user_id', value: userId),
           callback: (payload) {
-            final newRecord = payload.newRecord;
-            _showAndroidNotification(
-              title: newRecord['title']?.toString() ?? 'Info',
-              body: newRecord['body']?.toString() ?? '',
-              payload: newRecord['type']?.toString(), 
-            );
+            // [LOGIKA PENTING]
+            // Kita HANYA update unread count di sini.
+            // JANGAN show notifikasi di sini, karena FCM di main.dart sudah melakukannya.
+            // Kalau di sini di-show juga, nanti notifikasi muncul 2 kali (double).
+            
+            debugPrint("Data baru di database, update counter...");
             _fetchUnreadCount(); 
           },
         )
@@ -76,30 +102,29 @@ class NotificationManager {
     _fetchUnreadCount();
   }
 
+  // --- FUNGSI INTERNAL MENAMPILKAN NOTIFIKASI ---
   Future<void> _showAndroidNotification({
     required String title, 
     required String body, 
     String? payload
   }) async {
-    // ID Notifikasi (Int)
+    // ID Notifikasi unik berdasarkan waktu
     int notificationId = (DateTime.now().millisecondsSinceEpoch / 1000).floor();
 
-    // Detail Notifikasi
-    // HAPUS 'channelDescription' jika masih error, tapi di v17 biasanya aman.
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'channel_logithm_main', 
-      'Logithm Notifications',
+      'channel_logithm_main', // ID Channel
+      'Logithm Notifications', // Nama Channel
       channelDescription: 'Pemberitahuan aplikasi Logithm',
       importance: Importance.max,
       priority: Priority.high,
       ticker: 'ticker',
       playSound: true,
       enableVibration: true,
+      // color: Colors.blue, // Opsional: Warna icon notif
     );
 
     const NotificationDetails details = NotificationDetails(android: androidDetails);
 
-    // TAMPILKAN
     try {
       await _localNotifications.show(
         notificationId, 
@@ -109,10 +134,11 @@ class NotificationManager {
         payload: payload,
       );
     } catch (e) {
-      debugPrint("Gagal show notif: $e");
+      debugPrint("Gagal show notif lokal: $e");
     }
   }
 
+  // --- HITUNG JUMLAH BELUM DIBACA ---
   Future<void> _fetchUnreadCount() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
@@ -127,6 +153,7 @@ class NotificationManager {
     } catch (_) {}
   }
 
+  // --- TANDAI SUDAH DIBACA (SATU) ---
   Future<void> markAsRead(int notificationId) async {
     try {
       await Supabase.instance.client
@@ -137,6 +164,7 @@ class NotificationManager {
     } catch (_) {}
   }
   
+  // --- TANDAI SUDAH DIBACA (SEMUA) ---
   Future<void> markAllAsRead() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;

@@ -1,4 +1,4 @@
-import 'package:flutter/gestures.dart'; // [PENTING] Untuk TextSpan clickable
+import 'package:flutter/gestures.dart'; 
 import 'package:flutter/material.dart';
 import '../services/auth_manager.dart';
 import '../services/progress_manager.dart';
@@ -17,8 +17,12 @@ class _RegisterPageState extends State<RegisterPage> {
   final _passwordController = TextEditingController();
   
   bool isLoading = false;
-  bool _isTosAccepted = false; // [BARU] Variable status checkbox
+  
+  // [BARU] Dua variabel untuk checkbox
+  bool _isTosAccepted = false; 
+  bool _isPrivacyAccepted = false; 
 
+  // --- LOGIC REGISTER EMAIL ---
   Future<void> _handleRegister() async {
     // 1. Validasi Input Kosong
     if (_usernameController.text.isEmpty || _emailController.text.isEmpty || _passwordController.text.isEmpty) {
@@ -26,13 +30,17 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
-    // 2. [BARU] Validasi Checkbox ToS
+    // 2. [PERBAIKAN] Validasi Checkbox Ganda
     if (!_isTosAccepted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Anda harus menyetujui Syarat & Ketentuan"), 
-          backgroundColor: Colors.redAccent
-        )
+        const SnackBar(content: Text("Anda harus menyetujui Syarat & Ketentuan"), backgroundColor: Colors.redAccent)
+      );
+      return;
+    }
+
+    if (!_isPrivacyAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Anda harus menyetujui Kebijakan Privasi"), backgroundColor: Colors.redAccent)
       );
       return;
     }
@@ -64,73 +72,172 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
-  // [BARU] Fungsi Menampilkan Pop-up ToS
+  // --- LOGIC GOOGLE SIGN IN ---
+  Future<void> _handleGoogleLogin() async {
+    // Google Login juga butuh persetujuan ToS & Privacy
+    if (!_isTosAccepted || !_isPrivacyAccepted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Mohon setujui Syarat & Ketentuan serta Kebijakan Privasi."), backgroundColor: Colors.orange)
+      );
+      return;
+    }
+
+    setState(() => isLoading = true);
+    try {
+      await AuthManager().loginWithGoogle();
+      await ProgressManager.init();
+      
+      if (mounted) {
+        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Berhasil masuk dengan Google!"), backgroundColor: Colors.green)
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Google Error: $e"), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  // [BARU] Dialog Syarat & Ketentuan (English)
   void _showTosDialog() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Syarat & Ketentuan", style: TextStyle(fontWeight: FontWeight.bold)),
-        // Menggunakan Container dengan tinggi terbatas agar bisa discroll
+        title: const Text("Terms & Conditions", style: TextStyle(fontWeight: FontWeight.bold)),
         content: SizedBox(
-          height: 400, // Batasi tinggi agar tidak memenuhi layar
+          height: 400,
           width: double.maxFinite,
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
-              children: const [
-                Text("Terakhir Diperbarui: 25 Mei 2024", style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12, color: Colors.grey)),
-                SizedBox(height: 15),
+              children: [
+                const Text("Effective Date: 2026-02-04", style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12, color: Colors.grey)),
+                const SizedBox(height: 15),
                 
-                Text("1. Pendahuluan", style: TextStyle(fontWeight: FontWeight.bold)),
-                Text("Selamat datang di Logithm. Dengan mendaftar dan menggunakan aplikasi ini, Anda setuju untuk tunduk pada Syarat dan Ketentuan berikut. Jika Anda tidak setuju, mohon untuk tidak menggunakan aplikasi ini."),
-                SizedBox(height: 10),
+                _buildBoldText("Introduction"),
+                const Text("These terms and conditions apply to the Logithm app (hereby referred to as \"Application\") for mobile devices that was created by Luthfi Fuad Radityawan (hereby referred to as \"Service Provider\") as a Free service. Upon downloading or utilizing the Application, you are automatically agreeing to the following terms. It is strongly advised that you thoroughly read and understand these terms prior to using the Application."),
+                const SizedBox(height: 10),
 
-                Text("2. Akun Pengguna", style: TextStyle(fontWeight: FontWeight.bold)),
-                Text("• Anda bertanggung jawab penuh atas keamanan akun dan kata sandi Anda.\n• Anda setuju untuk memberikan data yang akurat (Username & Email) saat pendaftaran.\n• Satu akun hanya boleh digunakan oleh satu pengguna."),
-                SizedBox(height: 10),
+                _buildBoldText("Intellectual Property"),
+                const Text("Unauthorized copying, modification of the Application, any part of the Application, or our trademarks is strictly prohibited. Any attempts to extract the source code of the Application, translate the Application into other languages, or create derivative versions are not permitted. All trademarks, copyrights, database rights, and other intellectual property rights related to the Application remain the property of the Service Provider."),
+                const SizedBox(height: 10),
 
-                Text("3. Privasi & Data Pengguna", style: TextStyle(fontWeight: FontWeight.bold)),
-                Text("Kami menghargai privasi Anda. Data yang kami kumpulkan meliputi:\n• Nama Pengguna (Username)\n• Alamat Email\n• Progres Belajar & Skor Latihan\n\nData ini digunakan semata-mata untuk fitur Leaderboard, pemulihan akun, dan analisis progres belajar. Kami tidak akan menjual data Anda ke pihak ketiga."),
-                SizedBox(height: 10),
+                _buildBoldText("Modifications & Charges"),
+                const Text("The Service Provider is dedicated to ensuring that the Application is as beneficial and efficient as possible. As such, they reserve the right to modify the Application or charge for their services at any time and for any reason. The Service Provider assures you that any charges for the Application or its services will be clearly communicated to you."),
+                const SizedBox(height: 10),
 
-                Text("4. Etika Penggunaan", style: TextStyle(fontWeight: FontWeight.bold)),
-                Text("Saat menggunakan fitur komunitas atau leaderboard, dilarang:\n• Menggunakan kata-kata kasar, SARA, atau pornografi pada Username.\n• Melakukan kecurangan (cheating) atau memanipulasi skor.\n• Mencoba meretas atau merusak sistem aplikasi."),
-                SizedBox(height: 10),
+                _buildBoldText("Data Security & Device Usage"),
+                const Text("The Application stores and processes personal data that you have provided to the Service Provider in order to provide the Service. It is your responsibility to maintain the security of your phone and access to the Application. The Service Provider strongly advise against jailbreaking or rooting your phone."),
+                const SizedBox(height: 10),
 
-                Text("5. Kekayaan Intelektual", style: TextStyle(fontWeight: FontWeight.bold)),
-                Text("Seluruh materi, soal latihan, dan kode dalam aplikasi ini adalah hak cipta Logithm. Dilarang menyalin atau mendistribusikan ulang materi untuk tujuan komersial tanpa izin."),
-                SizedBox(height: 10),
+                _buildBoldText("Third-Party Services"),
+                const Text("Please note that the Application utilizes third-party services that have their own Terms and Conditions:\n• Google Play Services"),
+                const SizedBox(height: 10),
 
-                Text("6. Penafian (Disclaimer)", style: TextStyle(fontWeight: FontWeight.bold)),
-                Text("Aplikasi ini disediakan 'sebagaimana adanya'. Kami berusaha menyajikan materi yang akurat, namun tidak menjamin aplikasi bebas dari kesalahan (bug) atau gangguan server."),
-                SizedBox(height: 20),
-                
-                Text("Dengan mengklik tombol 'Saya Setuju', Anda menyatakan telah membaca dan memahami seluruh ketentuan di atas.", 
-                  style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12)),
+                _buildBoldText("Connectivity & Charges"),
+                const Text("Some functions of the Application require an active internet connection. The Service Provider cannot be held responsible if the Application does not function at full capacity due to lack of access to Wi-Fi or if you have exhausted your data allowance. You may incur charges from your mobile provider for data usage."),
+                const SizedBox(height: 10),
+
+                _buildBoldText("Updates & Termination"),
+                const Text("The Service Provider may wish to update the application at some point. You agree to always accept updates to the application when offered to you. The Service Provider may also wish to cease providing the application and may terminate its use at any time without providing termination notice to you."),
+                const SizedBox(height: 10),
+
+                _buildBoldText("Contact Us"),
+                const Text("If you have any questions or suggestions about the Terms and Conditions, please do not hesitate to contact the Service Provider at logithm.projects@gmail.com."),
               ],
             ),
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Batal", style: TextStyle(color: Colors.grey)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
             onPressed: () {
-              // Simpan status setuju
               setState(() => _isTosAccepted = true);
               Navigator.pop(ctx);
             },
-            child: const Text("Saya Setuju"),
+            child: const Text("I Agree"),
           )
         ],
       ),
+    );
+  }
+
+  // [BARU] Dialog Kebijakan Privasi (English)
+  void _showPrivacyDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Privacy Policy", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          height: 400,
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text("Effective Date: 2026-02-04", style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12, color: Colors.grey)),
+                const SizedBox(height: 15),
+
+                const Text("This privacy policy is applicable to the Logithm app (hereinafter referred to as \"Application\") for mobile devices, which was developed by Luthfi Fuad Radityawan (hereinafter referred to as \"Service Provider\") as a Free service. This service is provided \"AS IS\"."),
+                const SizedBox(height: 10),
+
+                _buildBoldText("1. User Provided Information"),
+                const Text("The Application acquires the information you supply when you download and register the Application. Registration is optional but recommended. However, bear in mind that you might not be able to utilize some of the features offered by the Application (such as saving game progress, leaderboard, and cloud sync) unless you register.\n\nWhen you register with us, you generally provide:\n• Your email address and username.\n• Password (encrypted securely via Supabase Auth).\n• Game progress data (scores, levels, and achievements)."),
+                const SizedBox(height: 10),
+
+                _buildBoldText("2. Automatically Collected Information"),
+                const Text("In addition, the Application may collect certain information automatically, including, but not limited to, the type of mobile device you use, your mobile devices unique device ID, the IP address of your mobile device, your mobile operating system, and information about the way you use the Application."),
+                const SizedBox(height: 10),
+
+                _buildBoldText("3. Third Party Access & Backend"),
+                const Text("Important Note on Backend Services:\nThis Application utilizes Supabase as a backend service provider for Authentication (Login/Register) and Database storage. By using this Application, you acknowledge that your data (Email, User ID, and Game Progress) is stored securely on Supabase servers.\n\nThird-party service providers used by the Application:\n• Google Play Services\n• Supabase"),
+                const SizedBox(height: 10),
+
+                _buildBoldText("4. Data Retention & Deletion"),
+                const Text("The Service Provider will retain User Provided data for as long as you use the Application and for a reasonable time thereafter.\n\nRight to Delete Data:\nIf you would like to delete your account and all associated data (including high scores and progress) from our servers, please contact us at logithm.projects@gmail.com with the subject \"Delete Account\". We will process your request and permanently remove your data within a reasonable timeframe."),
+                const SizedBox(height: 10),
+
+                _buildBoldText("5. Children's Privacy"),
+                const Text("The Service Provider does not knowingly collect personally identifiable information from children under the age of 13. If you are a parent or guardian and you are aware that your child has provided us with personal information without consent, please contact the Service Provider."),
+                const SizedBox(height: 10),
+
+                _buildBoldText("6. Security"),
+                const Text("We provide physical, electronic, and procedural safeguards to protect information we process and maintain. Your passwords are never stored in plain text but are hashed and salted using industry-standard encryption provided by Supabase Auth."),
+                const SizedBox(height: 10),
+
+                _buildBoldText("Contact Us"),
+                const Text("If you have any questions regarding privacy while using the Application, please contact the Service Provider via email at logithm.projects@gmail.com."),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            onPressed: () {
+              setState(() => _isPrivacyAccepted = true);
+              Navigator.pop(ctx);
+            },
+            child: const Text("I Agree"),
+          )
+        ],
+      ),
+    );
+  }
+
+  // Helper untuk teks tebal
+  Widget _buildBoldText(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4.0),
+      child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
     );
   }
 
@@ -179,19 +286,16 @@ class _RegisterPageState extends State<RegisterPage> {
               
               const SizedBox(height: 20),
 
-              // --- [BARU] CHECKBOX Syarat & Ketentuan ---
+              // --- CHECKBOX 1: Syarat & Ketentuan ---
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start, // Agar sejajar atas jika teks panjang
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(
-                    height: 24, 
-                    width: 24,
+                    height: 24, width: 24,
                     child: Checkbox(
                       value: _isTosAccepted,
                       activeColor: primaryColor,
-                      onChanged: (val) {
-                        setState(() => _isTosAccepted = val ?? false);
-                      },
+                      onChanged: (val) => setState(() => _isTosAccepted = val ?? false),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -204,14 +308,45 @@ class _RegisterPageState extends State<RegisterPage> {
                           TextSpan(
                             text: "Syarat & Ketentuan",
                             style: const TextStyle(
-                              color: primaryColor, 
-                              fontWeight: FontWeight.bold,
-                              decoration: TextDecoration.underline,
+                              color: primaryColor, fontWeight: FontWeight.bold, decoration: TextDecoration.underline
                             ),
-                            // Event handler klik teks
                             recognizer: TapGestureRecognizer()..onTap = _showTosDialog,
                           ),
-                          const TextSpan(text: " serta Kebijakan Privasi."),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              // --- CHECKBOX 2: Kebijakan Privasi ---
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 24, width: 24,
+                    child: Checkbox(
+                      value: _isPrivacyAccepted,
+                      activeColor: primaryColor,
+                      onChanged: (val) => setState(() => _isPrivacyAccepted = val ?? false),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: TextStyle(color: Colors.grey[700], fontSize: 14),
+                        children: [
+                          const TextSpan(text: "Saya menyetujui "),
+                          TextSpan(
+                            text: "Kebijakan Privasi",
+                            style: const TextStyle(
+                              color: primaryColor, fontWeight: FontWeight.bold, decoration: TextDecoration.underline
+                            ),
+                            recognizer: TapGestureRecognizer()..onTap = _showPrivacyDialog,
+                          ),
                         ],
                       ),
                     ),
@@ -236,6 +371,31 @@ class _RegisterPageState extends State<RegisterPage> {
                   child: isLoading 
                     ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)) 
                     : const Text("DAFTAR SEKARANG", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+              
+              // --- OR DIVIDER ---
+              Row(children: [
+                Expanded(child: Divider(color: Colors.grey[300])),
+                Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text("ATAU", style: TextStyle(color: Colors.grey[500], fontSize: 12))),
+                Expanded(child: Divider(color: Colors.grey[300])),
+              ]),
+              const SizedBox(height: 20),
+
+              // --- GOOGLE BUTTON ---
+              SizedBox(
+                width: double.infinity,
+                height: 55,
+                child: OutlinedButton.icon(
+                  onPressed: isLoading ? null : _handleGoogleLogin,
+                  icon: const Icon(Icons.g_mobiledata, size: 32, color: Colors.red), 
+                  label: const Text("Daftar dengan Google", style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    side: BorderSide(color: Colors.grey[300]!)
+                  ),
                 ),
               ),
 

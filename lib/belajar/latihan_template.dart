@@ -113,12 +113,15 @@ class _LatihanTemplateState extends State<LatihanTemplate> {
     ];
   }
 
-  // --- LOGIKA UTAMA ---
+  // --- LOGIKA UTAMA (FIX AUDIO) ---
   void checkAnswer() async {
     if (selectedIndex == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pilih jawaban dulu ya!")));
       return;
     }
+
+    // 1. Matikan BGM sebentar agar SFX terdengar jelas
+    AudioManager().pauseBGM();
 
     bool correct = selectedIndex == widget.correctAnswerIndex;
 
@@ -128,12 +131,13 @@ class _LatihanTemplateState extends State<LatihanTemplate> {
     });
 
     if (correct) {
-      // 1. Play Audio Benar
-      await AudioManager().playLatihanCorrect();
+      // 2. Play Audio Benar
+      // Pastikan fungsi ini ada di AudioManager atau gunakan playSfx('correct.mp3')
+      await AudioManager().playLatihanCorrect(); 
       
-      // 2. [FIX] Paksa BGM nyala lagi setelah 2 detik
-      Future.delayed(const Duration(seconds: 2), () {
-        AudioManager().startBackgroundMusic();
+      // 3. Nyalakan lagi BGM setelah durasi SFX (misal 2.5 detik)
+      Future.delayed(const Duration(milliseconds: 7000), () {
+        if (mounted) AudioManager().resumeBGM();
       });
 
       setState(() => isSaving = true);
@@ -149,20 +153,18 @@ class _LatihanTemplateState extends State<LatihanTemplate> {
         if (success) {
           _showTotalScoreDialog(potentialScore);
         } else {
-          // Jika poin sudah pernah diambil, tetap munculkan dialog tapi beda pesan (opsional)
-          // Atau langsung tampilkan snackbar
            ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Jawaban Benar! (Poin sudah diambil sebelumnya)"), backgroundColor: Colors.green),
           );
         }
       }
     } else {
-      // 1. Play Audio Salah
+      // 2. Play Audio Salah
       await AudioManager().playWrong();
       
-      // 2. [FIX] Paksa BGM nyala lagi setelah 1 detik
-      Future.delayed(const Duration(seconds: 1), () {
-        AudioManager().startBackgroundMusic();
+      // 3. Nyalakan lagi BGM setelah durasi SFX (misal 1.5 detik)
+      Future.delayed(const Duration(milliseconds: 2500), () {
+        if (mounted) AudioManager().resumeBGM();
       });
 
       setState(() {
@@ -174,8 +176,8 @@ class _LatihanTemplateState extends State<LatihanTemplate> {
   }
 
   void _finishExercise() async {
-    // Pastikan BGM menyala saat keluar
-    AudioManager().startBackgroundMusic();
+    // Pastikan BGM menyala saat keluar (Resume, bukan Start dari awal)
+    AudioManager().resumeBGM();
 
     int currentTotal = ProgressManager.totalScore.value;
     if (!mounted) return;
@@ -254,7 +256,6 @@ class _LatihanTemplateState extends State<LatihanTemplate> {
 
   @override
   Widget build(BuildContext context) {
-    // Logika warna indikator poin
     Color scoreColor;
     if (potentialScore >= widget.baseScore * 0.8) {
       scoreColor = Colors.green;
@@ -264,9 +265,8 @@ class _LatihanTemplateState extends State<LatihanTemplate> {
       scoreColor = Colors.red;
     }
 
-    // [FIX] Tambahkan PopScope (Pengganti WillPopScope) agar tidak bisa back saat loading
     return PopScope(
-      canPop: !isSaving, // Tidak bisa back jika sedang saving
+      canPop: !isSaving, 
       onPopInvokedWithResult: (didPop, result) {
          if (didPop) return;
          if (isSaving) {
@@ -345,15 +345,12 @@ class _LatihanTemplateState extends State<LatihanTemplate> {
 
                 if (isChecked) {
                   if (index == widget.correctAnswerIndex) {
-                    // Jawaban Benar (Selalu hijau)
                     if (isSelected) {
                         cardColor = Colors.green[50]!; borderColor = Colors.green; icon = Icons.check_circle; iconColor = Colors.green;
                     } else {
-                        // Tampilkan jawaban benar meski tidak dipilih (opsional, tapi bagus untuk edukasi)
                         borderColor = Colors.green.withOpacity(0.5); 
                     }
                   } else if (isSelected && !isCorrect) {
-                    // Jawaban Salah yang dipilih user
                     cardColor = Colors.red[50]!; borderColor = Colors.red; icon = Icons.cancel; iconColor = Colors.red;
                   }
                 } else if (isSelected) {
@@ -380,7 +377,7 @@ class _LatihanTemplateState extends State<LatihanTemplate> {
 
               const SizedBox(height: 10),
 
-              // --- PENJELASAN (MUNCUL JIKA SUDAH JAWAB) ---
+              // --- PENJELASAN ---
               if (isChecked && selectedIndex != null)
                 Container(
                   margin: const EdgeInsets.only(bottom: 20),

@@ -1,6 +1,6 @@
 # Logithm - Sistem Simulasi Percabangan & Pengulangan
 
- <img src="screenshot/banner.jpg" width="200">
+ <img src="screenshot/banner.jpeg" width="200">
 
 
 **Logithm** adalah aplikasi pembelajaran berbasis Android yang dirancang untuk membantu mahasiswa Teknik Informatika memahami konsep dasar algoritma, khususnya **Percabangan (Branching)** dan **Pengulangan (Looping)**.
@@ -24,9 +24,6 @@ Aplikasi ini sedang dalam proses peninjauan di Google Play Store. Namun, Anda da
 * **Architecture:** MVVM (atau sebutkan arsitektur yang Anda pakai)
 
 ## 📸 Screenshots
-| Halaman Utama | Simulasi | Kuis |
-|:---:|:---:|:---:|
-| ## 📸 Screenshots
 | Halaman Utama | Simulasi | Kuis |
 |:---:|:---:|:---:|
 | <img src="screenshot/home.jpg" width="200"> | <img src="screenshot/simulasi.jpg" width="200"> | <img src="screenshot/kuis.jpg" width="200"> |

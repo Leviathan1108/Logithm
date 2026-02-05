@@ -9,7 +9,7 @@ import '../../services/progress_manager.dart';
 import '../../services/audio_manager.dart';
 import '../models/materi_model.dart';
 
-// --- IMPORT SEMUA HALAMAN LATIHAN (Pastikan path benar) ---
+// --- IMPORT SEMUA HALAMAN LATIHAN ---
 import '../latihan/latihan1.dart';
 import '../latihan/latihan2.dart';
 import '../latihan/latihan3.dart';
@@ -188,27 +188,32 @@ class _MaterialLearningScreenState extends State<MaterialLearningScreen> {
   Future<void> _finishAndGoToPractice() async {
     setState(() => _isLoading = true);
     
-    // 1. Play Audio Materi Selesai
+    // [PERBAIKAN AUDIO] ---------------------------------------------
+    // 1. Pause BGM dulu agar suara SFX terdengar jelas
+    await AudioManager().pauseBGM();
+
+    // 2. Play Audio Materi Selesai (SFX)
     await AudioManager().playMateriComplete();
 
-    // 2. [BARU] Paksa BGM nyala lagi setelah 3 detik
-    // Ini memastikan musik latar kembali hidup setelah SFX selesai
-    Future.delayed(const Duration(seconds: 3), () {
-      AudioManager().startBackgroundMusic();
+    // 3. Resume BGM setelah 3 detik (estimasi durasi SFX selesai)
+    // Gunakan resumeBGM() agar musik lanjut, bukan startBackgroundMusic() yang restart dari awal
+    Future.delayed(const Duration(seconds: 7), () {
+      if (mounted) AudioManager().resumeBGM(); 
     });
+    // ---------------------------------------------------------------
 
     try {
-      // 3. Simpan Progress dan Cek Status (Apakah Baru?)
+      // 4. Simpan Progress dan Cek Status (Apakah Baru?)
       bool isFirstTimeCompletion = await ProgressManager.markAsComplete(widget.content.id);
       
       if (mounted) {
-        setState(() => _isLoading = false); // Stop loading sebelum popup
+        setState(() => _isLoading = false); 
 
         if (isFirstTimeCompletion) {
           // A. Jika Baru Pertama Kali Selesai -> Tampilkan Pop-Up Reward
           await showDialog(
             context: context,
-            barrierDismissible: false, // User harus klik tombol
+            barrierDismissible: false, 
             builder: (context) {
               return AlertDialog(
                 backgroundColor: Theme.of(context).colorScheme.surface,

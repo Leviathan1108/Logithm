@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/auth_manager.dart';
 import '../services/progress_manager.dart';
-import 'register_page.dart'; // Import halaman register
-import '../settings/account_security_page.dart'; // [PENTING] Import halaman VerifyOtpPage
+import 'register_page.dart'; 
+import '../settings/account_security_page.dart'; 
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -23,6 +23,7 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  // --- LOGIC LOGIN EMAIL BIASA ---
   Future<void> _handleLogin() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Email dan Password harus diisi")));
@@ -55,9 +56,35 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  // --- LOGIC LUPA PASSWORD (FROM LOGIN PAGE) ---
+  // --- [BARU] LOGIC LOGIN GOOGLE ---
+  Future<void> _handleGoogleLogin() async {
+    setState(() => isLoading = true);
+    try {
+      // Panggil fungsi Google Sign In dari AuthManager
+      await AuthManager().loginWithGoogle();
+      
+      // Init data user (progress, settings, dll)
+      await ProgressManager.init();
+      
+      if (mounted) {
+        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Berhasil masuk dengan Google!"), backgroundColor: Colors.green)
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Google Error: $e"), backgroundColor: Colors.red)
+        );
+      }
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  // --- LOGIC LUPA PASSWORD ---
   void _forgotPasswordFlow() {
-    // Gunakan email yang sudah diketik user (jika ada) sebagai pre-fill
     final resetEmailCtrl = TextEditingController(text: _emailController.text);
 
     showDialog(
@@ -90,14 +117,12 @@ class _LoginPageState extends State<LoginPage> {
               }
               
               Navigator.pop(ctx);
-              setState(() => isLoading = true); // Tampilkan loading di halaman login
+              setState(() => isLoading = true); 
               
               try {
-                // 1. Kirim OTP via SMTP (AuthManager Manual Flow)
                 await AuthManager().sendForgotPasswordOTP(resetEmailCtrl.text.trim());
                 
                 if (mounted) {
-                  // 2. Buka Halaman Verifikasi OTP (yang ada di file account_security_page.dart)
                   Navigator.push(
                     context, 
                     MaterialPageRoute(builder: (_) => VerifyOtpPage(email: resetEmailCtrl.text.trim()))
@@ -136,11 +161,11 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // --- LOGO LOGITHM ---
+              // --- LOGO ---
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: primaryColor.withOpacity(0.1), // Fix: withOpacity lebih umum
+                  color: primaryColor.withOpacity(0.1), 
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.lock_open_rounded, size: 50, color: primaryColor),
@@ -155,7 +180,7 @@ class _LoginPageState extends State<LoginPage> {
 
               const SizedBox(height: 40),
               
-              // --- INPUT EMAIL ---
+              // --- FORM ---
               _buildTextField(
                 controller: _emailController,
                 label: "Email",
@@ -165,8 +190,6 @@ class _LoginPageState extends State<LoginPage> {
                 accentColor: primaryColor,
               ),
               const SizedBox(height: 20),
-              
-              // --- INPUT PASSWORD ---
               _buildTextField(
                 controller: _passwordController,
                 label: "Password",
@@ -176,7 +199,6 @@ class _LoginPageState extends State<LoginPage> {
                 accentColor: primaryColor,
               ),
               
-              // --- TOMBOL LUPA PASSWORD [BARU] ---
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
@@ -185,9 +207,9 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
 
-              const SizedBox(height: 20), // Jarak disesuaikan karena ada tombol lupa password
+              const SizedBox(height: 20),
               
-              // --- TOMBOL MASUK ---
+              // --- TOMBOL MASUK EMAIL ---
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -206,9 +228,35 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
               
+              const SizedBox(height: 25),
+
+              // --- [BARU] DIVIDER ---
+              Row(children: [
+                Expanded(child: Divider(color: Colors.grey[300])),
+                Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text("ATAU", style: TextStyle(color: Colors.grey[500], fontSize: 12))),
+                Expanded(child: Divider(color: Colors.grey[300])),
+              ]),
+              
+              const SizedBox(height: 25),
+
+              // --- [BARU] TOMBOL GOOGLE ---
+              SizedBox(
+                width: double.infinity,
+                height: 55,
+                child: OutlinedButton.icon(
+                  onPressed: isLoading ? null : _handleGoogleLogin,
+                  icon: const Icon(Icons.g_mobiledata, size: 35, color: Colors.red), 
+                  label: const Text("Masuk dengan Google", style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    side: BorderSide(color: Colors.grey[300]!)
+                  ),
+                ),
+              ),
+              
               const SizedBox(height: 30),
               
-              // --- FOOTER (REGISTER LINK) ---
+              // --- FOOTER ---
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [

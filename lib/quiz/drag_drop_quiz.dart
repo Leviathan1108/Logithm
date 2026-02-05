@@ -201,12 +201,13 @@ class _DragDropQuizState extends State<DragDropQuiz> {
           if (_overtimeDuration >= _maxOvertimeLimit) {
             timer.cancel(); 
             
-            // 1. Play Audio Game Over
-            AudioManager().playGameOver(); 
+            // [FIX AUDIO - GAME OVER]
+            AudioManager().pauseBGM(); // 1. Pause BGM
+            AudioManager().playGameOver(); // 2. Play SFX
             
-            // 2. [FIX] Paksa BGM nyala lagi setelah 3 detik
-            Future.delayed(const Duration(seconds: 3), () {
-               AudioManager().startBackgroundMusic();
+            // 3. Resume BGM setelah 3 detik
+            Future.delayed(const Duration(seconds: 5), () {
+               if (mounted) AudioManager().resumeBGM();
             });
 
             _showTimeOutDialog(); 
@@ -244,7 +245,7 @@ class _DragDropQuizState extends State<DragDropQuiz> {
               child: Row(
                 children: [
                   Icon(_isOvertime ? Icons.warning : Icons.timer, 
-                    color: _isOvertime ? Colors.red : Colors.blue, size: 16),
+                  color: _isOvertime ? Colors.red : Colors.blue, size: 16),
                   const SizedBox(width: 5),
                   Text(
                     _isOvertime ? "+${_formatTime(_overtimeDuration)}" : _formatTime(_remainingTime),
@@ -548,12 +549,13 @@ class _DragDropQuizState extends State<DragDropQuiz> {
       _timer?.cancel();
       _calculateScore();
       
-      // 1. Play Audio Benar
-      AudioManager().playLatihanCorrect();
+      // [FIX AUDIO - CORRECT]
+      AudioManager().pauseBGM(); // 1. Pause
+      AudioManager().playLatihanCorrect(); // 2. Play SFX
       
-      // 2. [FIX] Paksa BGM nyala lagi setelah 2 detik
-      Future.delayed(const Duration(seconds: 2), () {
-        AudioManager().startBackgroundMusic();
+      // 3. Resume BGM setelah 2 detik
+      Future.delayed(const Duration(seconds: 7), () {
+        if (mounted) AudioManager().resumeBGM();
       });
 
       _showSuccessDialog();
@@ -562,12 +564,13 @@ class _DragDropQuizState extends State<DragDropQuiz> {
         _wrongAttempts++; 
       });
       
-      // 1. Play Audio Salah
-      AudioManager().playWrong();
+      // [FIX AUDIO - WRONG]
+      AudioManager().pauseBGM(); // 1. Pause
+      AudioManager().playWrong(); // 2. Play SFX
       
-      // 2. [FIX] Paksa BGM nyala lagi setelah 1 detik
-      Future.delayed(const Duration(seconds: 1), () {
-        AudioManager().startBackgroundMusic();
+      // 3. Resume BGM setelah 1 detik
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) AudioManager().resumeBGM();
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -581,7 +584,7 @@ class _DragDropQuizState extends State<DragDropQuiz> {
       );
       
       Future.delayed(const Duration(seconds: 2), () {
-         if (mounted) setState(() { isChecked = false; });
+          if (mounted) setState(() { isChecked = false; });
       });
     }
   }
@@ -646,7 +649,7 @@ class _DragDropQuizState extends State<DragDropQuiz> {
                 await ProgressManager.addScore(_finalScore);
                 
                 // Pastikan BGM menyala saat keluar
-                AudioManager().startBackgroundMusic();
+                AudioManager().resumeBGM();
                 
                 if (context.mounted) {
                   Navigator.pop(ctx);
@@ -679,7 +682,7 @@ class _DragDropQuizState extends State<DragDropQuiz> {
           ElevatedButton(
             onPressed: () {
               // Pastikan BGM menyala saat keluar
-              AudioManager().startBackgroundMusic();
+              AudioManager().resumeBGM();
               
               Navigator.pop(ctx); 
               Navigator.pop(context, 0); 

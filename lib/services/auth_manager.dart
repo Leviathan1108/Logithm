@@ -4,6 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
+import 'package:firebase_core/firebase_core.dart'; 
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:google_sign_in/google_sign_in.dart'; // [BARU] Import Google Sign In
 
 enum UserType { guest, loggedIn }
 
@@ -31,6 +34,8 @@ class AuthManager {
     } else {
       await _generateGuestIdentity();
     }
+    
+    _setupTokenRefreshListener();
   }
 
   // Helper: Set User Login
@@ -51,9 +56,10 @@ class AuthManager {
       username = user.email?.split('@')[0] ?? "User";
     }
 
-    // Bersihkan data guest
     guestCompletedMateriIds.clear();
     guestScore = 0;
+
+    _uploadFcmToken();
   }
 
   // Helper: Set Guest
@@ -77,7 +83,7 @@ class AuthManager {
   }
 
   // ===========================================================================
-  // BAGIAN 1: STANDARD AUTH (LOGIN, REGISTER, LOGOUT, UPDATE PROFILE)
+  // BAGIAN 1: STANDARD AUTH (LOGIN, REGISTER, LOGOUT)
   // ===========================================================================
 
   Future<void> login(String email, String password) async {
@@ -130,6 +136,22 @@ class AuthManager {
   }
 
   Future<void> logout() async {
+    try {
+      if (userId != null && currentUserType == UserType.loggedIn) {
+        await Supabase.instance.client
+            .from('profiles')
+            .update({'fcm_token': null}) 
+            .eq('id', userId!);
+      }
+    } catch (e) {
+      debugPrint("Gagal hapus token FCM: $e");
+    }
+
+    // Logout Google juga agar bersih
+    try {
+      await GoogleSignIn().signOut();
+    } catch (_) {}
+
     await Supabase.instance.client.auth.signOut();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear(); 
@@ -157,14 +179,12 @@ class AuthManager {
   }
 
   // ===========================================================================
-  // BAGIAN 2: SECURITY & PASSWORD MANAGEMENT
+  // BAGIAN 2: SECURITY (PASSWORD RESET)
   // ===========================================================================
 
-  // A. UPDATE PASSWORD (SAAT USER SUDAH LOGIN)
   Future<void> updatePassword(String newPassword) async {
     try {
       if (currentUserType != UserType.loggedIn) throw "Anda harus login.";
-      
       await Supabase.instance.client.auth.updateUser(
         UserAttributes(password: newPassword),
       );
@@ -174,21 +194,14 @@ class AuthManager {
     }
   }
 
-  // B. FORGOT PASSWORD FLOW (SMTP + OTP + RPC)
-
-  // 1. Generate & Kirim Kode
   Future<void> sendForgotPasswordOTP(String targetEmail) async {
     final supabase = Supabase.instance.client;
-    
-    // Cek email ada di profiles
     final check = await supabase.from('profiles').select('id').eq('email', targetEmail).maybeSingle();
-    if (check == null) throw "Email tidak terdaftar dalam sistem.";
+    if (check == null) throw "Email tidak terdaftar.";
 
-    // Generate Kode
     String code = (Random().nextInt(900000) + 100000).toString();
     DateTime expiresAt = DateTime.now().add(const Duration(minutes: 10));
 
-    // Simpan ke DB
     await supabase.from('verification_codes').delete().eq('email', targetEmail);
     await supabase.from('verification_codes').insert({
       'email': targetEmail,
@@ -196,11 +209,9 @@ class AuthManager {
       'expires_at': expiresAt.toIso8601String(),
     });
 
-    // Kirim Email
     await _sendEmailViaSMTP(targetEmail, code);
   }
 
-  // 2. Verifikasi Kode
   Future<bool> verifyOTP(String targetEmail, String inputCode) async {
     final response = await Supabase.instance.client
         .from('verification_codes')
@@ -210,32 +221,24 @@ class AuthManager {
         .maybeSingle();
 
     if (response == null) return false;
-
     final expiresAt = DateTime.parse(response['expires_at']);
     if (DateTime.now().isAfter(expiresAt)) return false;
-
     return true; 
   }
 
-  // 3. Reset Password Manual (Panggil RPC)
   Future<void> resetPasswordManual(String targetEmail, String newPassword, String verifiedCode) async {
-    // Validasi ulang
     bool isValid = await verifyOTP(targetEmail, verifiedCode);
-    if (!isValid) throw "Kode verifikasi tidak valid atau sudah kadaluarsa.";
+    if (!isValid) throw "Kode verifikasi tidak valid.";
 
-    // Panggil RPC Admin
     await Supabase.instance.client.rpc('admin_update_user_password', params: {
       'target_email': targetEmail,
       'new_password': newPassword
     });
 
-    // Bersihkan kode
     await Supabase.instance.client.from('verification_codes').delete().eq('email', targetEmail);
   }
 
-  // Helper SMTP
   Future<void> _sendEmailViaSMTP(String recipient, String otp) async {
-    // GANTI DENGAN KREDENSIAL PENGIRIM ANDA
     String username = 'logithm.projects@gmail.com'; 
     String password = 'kati tyxg pzze bcnn'; 
 
@@ -244,16 +247,7 @@ class AuthManager {
       ..from = Address(username, 'Keamanan Logithm')
       ..recipients.add(recipient)
       ..subject = 'Kode Reset Password'
-      ..text = '''
-Halo,
-
-Permintaan reset password diterima.
-Kode verifikasi Anda adalah:
-
-$otp
-
-Kode berlaku 10 menit.
-''';
+      ..text = 'Kode verifikasi Anda adalah: $otp\n\nBerlaku 10 menit.';
 
     try {
       await send(message, smtpServer);
@@ -317,6 +311,144 @@ Kode berlaku 10 menit.
       } catch (e) {
         return 0;
       }
+    }
+  }
+
+  // ===========================================================================
+  // BAGIAN 4: PUSH NOTIFICATION (FCM)
+  // ===========================================================================
+  
+  Future<void> _uploadFcmToken() async {
+    if (currentUserType == UserType.guest || userId == null) return;
+    if (Firebase.apps.isEmpty) {
+      debugPrint("Warning: Firebase belum di-init. Melewati upload token.");
+      return;
+    }
+
+    try {
+      final messaging = FirebaseMessaging.instance;
+      NotificationSettings settings = await messaging.requestPermission(
+        alert: true, badge: true, sound: true,
+      );
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        String? token = await messaging.getToken();
+        if (token != null) {
+          debugPrint("FCM Token: $token");
+          await Supabase.instance.client
+              .from('profiles')
+              .update({
+                'fcm_token': token,
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', userId!);
+        }
+      }
+    } catch (e) {
+      debugPrint("Gagal upload FCM Token: $e");
+    }
+  }
+
+  void _setupTokenRefreshListener() {
+    if (Firebase.apps.isNotEmpty) {
+      FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+        if (currentUserType == UserType.loggedIn && userId != null) {
+          try {
+            await Supabase.instance.client
+              .from('profiles')
+              .update({
+                'fcm_token': newToken,
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', userId!);
+          } catch (_) {}
+        }
+      });
+    }
+  }
+
+  // ===========================================================================
+  // [BARU] BAGIAN 5: GOOGLE SIGN IN
+  // ===========================================================================
+
+  Future<void> loginWithGoogle() async {
+    // -----------------------------------------------------------
+    // [PENTING] PASTE WEB CLIENT ID DARI GOOGLE CLOUD DISINI
+    // Walaupun ini App Android, kita wajib pakai WEB Client ID 
+    // agar Supabase bisa membaca tokennya.
+    // -----------------------------------------------------------
+    const webClientId = '412660843389-ej2mhcal7vc2tt0vsh2v7l9mqomf1gns.apps.googleusercontent.com';
+
+    // Untuk iOS (Biarkan null jika tidak pakai iOS)
+    const iosClientId = null;
+
+    final GoogleSignIn googleSignIn = GoogleSignIn(
+      clientId: iosClientId,
+      serverClientId: webClientId, 
+    );
+
+    try {
+      // 1. Trigger Native Sign In (Muncul Pop-up Pilih Akun)
+      final googleUser = await googleSignIn.signIn();
+      
+      // Jika user menutup pop-up tanpa memilih akun
+      if (googleUser == null) return; 
+
+      // 2. Ambil Auth Token dari Google
+      final googleAuth = await googleUser.authentication;
+      final accessToken = googleAuth.accessToken;
+      final idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        throw 'No ID Token found from Google.';
+      }
+
+      // 3. Login ke Supabase menggunakan Token Google
+      final response = await Supabase.instance.client.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+        accessToken: accessToken,
+      );
+
+      // 4. Handle Profil User di Database
+      if (response.user != null) {
+        final user = response.user!;
+        
+        // Cek apakah user ini sudah ada di tabel profiles
+        final existingProfile = await Supabase.instance.client
+            .from('profiles')
+            .select()
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (existingProfile == null) {
+          // Jika belum ada (User Baru), buatkan profil otomatis
+          // Buat username dari bagian depan email (sebelum @)
+          String cleanUsername = user.email!.split('@')[0];
+          // Hapus karakter aneh agar URL aman
+          cleanUsername = cleanUsername.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+          
+          await Supabase.instance.client.from('profiles').insert({
+            'id': user.id,
+            'username': cleanUsername,
+            'email': user.email,
+            'avatar_url': user.userMetadata?['avatar_url'], // Foto profil dari Google
+            'total_score': 0,
+            'tos_accepted_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+            'status': 'active'
+          });
+        }
+
+        // 5. Set status login di aplikasi
+        await _setLoggedInUser(user);
+        
+        // 6. Sinkronisasi data guest (jika ada)
+        await _syncGuestProgressToCloud();
+      }
+    } catch (e) {
+      if (e is AuthException) throw e.message;
+      throw "Gagal Login Google: $e";
     }
   }
 }
