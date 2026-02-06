@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:sizer/sizer.dart';
 import 'package:permission_handler/permission_handler.dart'; 
-import 'package:firebase_core/firebase_core.dart'; // [WAJIB] Core Firebase
-import 'package:firebase_messaging/firebase_messaging.dart'; // [WAJIB] FCM
+import 'package:firebase_core/firebase_core.dart'; 
+import 'package:firebase_messaging/firebase_messaging.dart'; 
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // Tambahkan ini untuk background handler
 
 // --- IMPORTS ---
 import 'services/audio_manager.dart'; 
@@ -13,22 +14,45 @@ import 'splash/splash_screen.dart';
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // [PENTING] Handler Notifikasi Background (Saat App Mati/Minimize)
-// Harus ditaruh di luar class (Top Level Function)
+// Kode ini berjalan di isolate terpisah, jadi harus inisialisasi plugin sendiri
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Pastikan Firebase di-init di isolate terpisah ini
   await Firebase.initializeApp();
   debugPrint("Notifikasi Background diterima: ${message.messageId}");
+
+  // JAGA-JAGA: Jika Edge Function mengirim Data Message saja (tanpa notification object),
+  // atau jika Android memblokir notifikasi sistem, kita paksa munculkan di sini.
+  if (message.notification == null && message.data.isNotEmpty) {
+    final FlutterLocalNotificationsPlugin localNotif = FlutterLocalNotificationsPlugin();
+    
+    // Setup minimal untuk background isolate
+    const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
+    const InitializationSettings settings = InitializationSettings(android: androidSettings);
+    await localNotif.initialize(settings);
+
+    await localNotif.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      message.data['title'] ?? 'Info', // Pastikan edge function kirim title di data
+      message.data['body'] ?? 'Pesan baru masuk', 
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'channel_logithm_main', // ID Channel HARUS SAMA
+          'Logithm Notifications',
+          importance: Importance.max,
+          priority: Priority.high,
+        ),
+      ),
+    );
+  }
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. SETUP FIREBASE (Urutan Pertama)
-  // Wajib ada agar FCM di AuthManager tidak error
+  // 1. SETUP FIREBASE
   await Firebase.initializeApp();
   
-  // Daftarkan handler untuk notifikasi saat app mati
+  // Daftarkan handler background
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   // 2. KONEKSI KE SUPABASE
@@ -37,10 +61,11 @@ void main() async {
     anonKey: 'sb_publishable_pudzup14Zxw9KAnMSJEN2w_00GRTccc',
   );
 
-  // 3. SETUP NOTIFIKASI LOKAL (Agar channel Android dibuat)
+  // 3. SETUP NOTIFIKASI LOKAL & CHANNEL
+  // Ini akan membuat Channel ID di Android settings saat pertama kali run
   await NotificationManager().init();
 
-  // 4. MULAI MUSIK BACKGROUND
+  // 4. MULAI MUSIK
   await AudioManager().startBackgroundMusic();
 
   runApp(const MyApp());
@@ -60,41 +85,39 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     
-    // A. Update Status Online Database
     _updatePresence();
-
-    // B. Setup Listener Notifikasi (FCM)
     _setupFCMListeners();
 
-    // C. Request Permission (Delay sedikit agar tidak tabrakan saat startup)
-    Future.delayed(const Duration(seconds: 2), () {
-      _requestNotificationPermission();
-    });
+    // Request permission agak dipercepat
+    _requestNotificationPermission();
   }
 
   // --- LOGIKA FCM LISTENER ---
   void _setupFCMListeners() {
-    // 1. Saat App sedang DIBUKA (Foreground)
-    // Firebase tidak otomatis munculkan notif jika app sedang dibuka.
-    // Kita harus memunculkannya manual pakai NotificationManager.
+    // 1. Saat App DIBUKA (Foreground)
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint("Pesan Foreground diterima: ${message.notification?.title}");
+      debugPrint("Pesan Foreground: ${message.notification?.title}");
       
-      if (message.notification != null) {
-        // Panggil fungsi publik di NotificationManager
-        NotificationManager().showManualNotification(
-          title: message.notification!.title ?? 'Info',
-          body: message.notification!.body ?? '',
-          payload: message.data['type'],
-        );
-      }
+      // Tampilkan notifikasi lokal agar user sadar ada pesan masuk saat main app
+      NotificationManager().showManualNotification(
+        title: message.notification?.title ?? message.data['title'] ?? 'Info',
+        body: message.notification?.body ?? message.data['body'] ?? '',
+        payload: message.data['type'],
+      );
     });
 
-    // 2. Saat Notifikasi DIKLIK (Dari background/closed)
-    // (Opsional) Tambahkan logika navigasi di sini
+    // 2. Saat Notifikasi DIKLIK (Dari background state)
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       debugPrint("Notifikasi diklik dari background!");
-      // Contoh: Navigator.pushNamed(...)
+      // Logic navigasi bisa ditaruh di sini
+    });
+    
+    // 3. Saat Notifikasi DIKLIK (Dari Terminated state / App Mati)
+    FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
+      if (message != null) {
+        debugPrint("App dibuka dari notifikasi (Terminated): ${message.data}");
+        // Logic navigasi bisa ditaruh di sini
+      }
     });
   }
 
@@ -106,12 +129,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       await Permission.notification.request();
     } 
     
-    // Minta izin via Firebase (Khusus iOS & Android Settings)
+    // Minta izin via Firebase
     FirebaseMessaging messaging = FirebaseMessaging.instance;
     await messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
+      provisional: false,
     );
   }
 
@@ -125,12 +149,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // App kembali aktif
       _updatePresence(); 
       AudioManager().startBackgroundMusic(); 
     } 
     else if (state == AppLifecycleState.paused) {
-      // App di-minimize
       AudioManager().stopBackgroundMusic(); 
     }
   }
